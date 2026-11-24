@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cut Optimization</title>
+<style>
+:root{--bg:#eef1ee;--panel:#fff;--ink:#1d2a26;--mute:#5d6b66;--line:#cfd7d2;--accent:#0f6b55;--accent-ink:#fff;--warn:#b3361f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:var(--ink);color:#fff;padding:18px 28px;display:flex;gap:16px;align-items:baseline;justify-content:space-between;flex-wrap:wrap}
+header h1{margin:0;font-size:22px;letter-spacing:.2px}
+header span{color:#a9bdb5;font-size:13px}
+  header .clear-storage{margin-left:auto;border:0;background:transparent;color:#a9bdb5;padding:4px 0;font-size:11px;opacity:.58}
+  header .clear-storage:hover,header .clear-storage:focus-visible{color:#fff;opacity:1;background:transparent}
+main{max-width:1100px;margin:0 auto;padding:22px 20px 60px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+section.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px}
+h2{margin:0 0 4px;font-size:17px}
+p.hint{margin:0 0 12px;color:var(--mute);font-size:13px}
+table.in{width:100%;border-collapse:collapse}
+table.in th{text-align:left;font-size:12px;color:var(--mute);font-weight:600;padding:0 6px 4px}
+table.in td{padding:3px 4px}
+input{font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:4px;width:100%;background:#fff;color:var(--ink)}
+input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+td.n input{min-width:90px}td.c{width:80px}td.l{width:110px}td.k{width:120px}td.x{width:34px}
+button{font:inherit;cursor:pointer;border-radius:4px;border:1px solid var(--line);background:#fff;padding:7px 12px;color:var(--ink)}
+button:hover{background:#f2f5f3}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:10px 22px}
+button.primary:hover{background:#0b5442}
+button.del{padding:5px 9px;color:var(--warn)}
+.opts{display:flex;gap:18px;flex-wrap:wrap;align-items:end;margin:18px 0}
+.opts label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:3px}
+.opts input{width:130px}
+.proj{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 18px}
+.err{background:#fbe9e5;border:1px solid #e6b3a8;color:var(--warn);padding:10px 14px;border-radius:4px;margin:12px 0}
+#report{margin-top:24px}
+.rhead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.rhead h2{font-size:20px}
+.rside{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.mini{border-collapse:collapse;font-size:13px}
+.mini td{padding:1px 0 1px 14px}.mini td+td{text-align:right;font-weight:700}
+table.rep{width:100%;border-collapse:collapse;margin:4px 0 10px;font-size:13px;background:#fff}
+table.rep th,table.rep td{border-bottom:1px solid var(--line);padding:2px 6px;text-align:left}
+table.rep th{font-size:12px;color:var(--mute)}
+h3{margin:12px 0 4px;font-size:15px}
+.pat{background:#fff;border:1px solid var(--line);border-radius:4px;padding:6px 10px;margin-bottom:6px;break-inside:avoid}
+.pat .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;gap:8px;flex-wrap:wrap}
+.bar{display:flex;height:19px;border:1px solid #2b3a35;background:repeating-linear-gradient(45deg,#e7ebe8,#e7ebe8 4px,#d3dad6 4px,#d3dad6 8px);overflow:hidden}
+.seg{display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;color:#102;overflow:hidden;white-space:nowrap;border-right:1px solid rgba(0,0,0,.5);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.kerf{background:#222;flex:none}
+.cuts{font-size:12.5px;color:var(--mute);margin-top:5px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12.5px;margin:6px 0 10px}
+.legend i{display:inline-block;width:12px;height:12px;border:1px solid #333;margin-right:4px;vertical-align:-1px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@media(min-width:700px),print{.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+
+@media print{
+ body{background:#fff}header,#inputs,.noprint,.opts{display:none!important}
+ main{padding:0;max-width:none}#report{margin:0}
+ .pat{break-inside:avoid}
+
+ @page{margin:12mm}
+}
+</style>
+</head>
+<body>
+<header><div style="display:flex;gap:16px;align-items:baseline"><h1>Cut Optimization</h1></div><button class="clear-storage" type="button" onclick="removeStoredData()">Remove all stored data</button></header>
+<main>
+<div class="opts proj noprint" style="margin-top:0">
+ <label>Project number<input id="pnum" style="width:110px" placeholder="000"></label>
+ <label>Project name<input id="pname" style="width:190px" placeholder="Project"></label>
+ <label>Phase<input id="pfase" style="width:90px" placeholder="xxx"></label>
+ <label>Designer<input id="pdes" style="width:170px" placeholder="Ruben Holvoet"></label>
+</div>
+<div id="inputs" class="grid">
+ <section class="card">
+  <h2>Stock lengths</h2>
+  <p class="hint">Leave Count empty for unlimited supply. You can paste a grid from Excel.</p>
+  <table class="in"><thead><tr><th>Name</th><th>Count</th><th>Length</th><th>Colour</th><th></th></tr></thead><tbody id="stock"></tbody></table>
+  <p><button onclick="addRow('stock')">+ Add stock</button></p>
+ </section>
+ <section class="card">
+  <h2>Pieces to cut</h2>
+  <p class="hint">You can copy a table from Excel and paste them into the first Name cell.</p>
+  <table class="in"><thead><tr><th>Name</th><th>Count</th><th>Length</th><th></th></tr></thead><tbody id="pieces"></tbody></table>
+  <p><button onclick="addRow('pieces')">+ Add piece</button></p>
+ </section>
+</div>
+<div class="opts">
+ <label>Saw kerf (blade width)<input id="kerf" type="number" min="0" step="any" value="5"></label>
+ <label>Start/end trim<input id="trim" type="number" min="0" step="any" value="60" style="width:110px"></label>
+ <label>Unit<input id="unit" value="mm" style="width:70px"></label>
+ <label>Search effort<input id="effort" type="number" min="1" max="5000" value="600" style="width:90px"></label>
+ <button class="primary" onclick="run()">Calculate cuts</button>
+ <button onclick="saveData()">Save inputs</button>
+ <button onclick="clearAll()">Clear all</button>
+</div>
+<div id="msg"></div>
+<div id="report"></div>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>(Math.round(n*100)/100).toString();
+
+function addRow(id,v){
+  v=v||{};
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td class="n"><input value="${esc(v.name||'')}" placeholder="Name" aria-label="Name"></td>
+  <td class="c"><input type="number" min="0" step="1" value="${v.count??''}" placeholder="${id==='stock'?'∞':'Count'}" aria-label="Count"></td>
+  <td class="l"><input type="number" min="0" step="any" value="${v.len??''}" placeholder="Length" aria-label="Length"></td>
+  ${id==='stock'?`<td class="k"><input value="${esc(v.color||'')}" placeholder="Brute" aria-label="Colour"></td>`:''}
+  <td class="x"><button class="del" title="Remove row" onclick="this.closest('tr').remove()">✕</button></td>`;
+  $('#'+id).appendChild(tr);
+}
+function readRows(id){
+  return [...$('#'+id).rows].map((tr,i)=>{
+    const [n,c,l,k]=[...tr.querySelectorAll('input')].map(x=>x.value.trim());
+    return {name:n||(id==='stock'?'Stock ':'Piece ')+(i+1),count:c,len:parseFloat(l),color:k};
+  }).filter(r=>r.len>0||r.count!=='');
+}
+function saveData(){
+  try{
+    localStorage.setItem('cutopt',JSON.stringify({stock:readRows('stock'),pieces:readRows('pieces'),kerf:$('#kerf').value,unit:$('#unit').value,trim:$('#trim').value,pname:$('#pname').value,pnum:$('#pnum').value,pfase:$('#pfase').value,pdes:$('#pdes').value}));
+     $('#msg').innerHTML='<p class="hint noprint">Inputs saved in this browser.</p>';
+  }catch(e){note('Could not save in this browser. Your browser may block storage for local files.',true)}
+}
+function loadData(){
+  try{
+    const d=JSON.parse(localStorage.getItem('cutopt')||'null');
+    if(d){d.stock.forEach(r=>addRow('stock',r));d.pieces.forEach(r=>addRow('pieces',r));$('#kerf').value=d.kerf;$('#unit').value=d.unit;$('#trim').value=d.trim??60;$('#pname').value=d.pname||'';$('#pnum').value=d.pnum||'';$('#pfase').value=d.pfase||'';$('#pdes').value=d.pdes||'';return}
+  }catch(e){}
+  addRow('stock',{name:'Bar',count:'',len:6000});
+  for(let i=0;i<4;i++)addRow('pieces');
+}
+function clearAll(){$('#stock').innerHTML='';$('#pieces').innerHTML='';$('#report').innerHTML='';$('#msg').innerHTML='';addRow('stock');for(let i=0;i<4;i++)addRow('pieces')}
+function removeStoredData(){
+  try{localStorage.removeItem('cutopt')}catch(e){}
+  window.location.reload();
+}
+function note(t,bad){$('#msg').innerHTML=bad?`<div class="err">${esc(t)}</div>`:`<p class="hint">${esc(t)}</p>`}
+
+/* ---------- Optimizer ---------- */
+function fill(rem,L,kerf){            // first fit in given order into one stock of length L
+  let used=0,idx=[];
+  for(let i=0;i<rem.length;i++){
+    const need=rem[i].len+kerf;
+    if(used+need<=L+kerf+1e-9){used+=need;idx.push(i)}
+  }
+  return {idx,used:used-kerf};
+}
+const byLen=(a,b)=>b.len-a.len||a.name.localeCompare(b.name);
+const layoutKey=b=>b.stock.name+'|'+b.stock.len+'|'+b.pieces.map(p=>p.name+':'+p.len).join(',');
+function pack(order,stocks,kerf,repeat){
+  let rem=order.slice();
+  const left=stocks.map(s=>s.count);
+  const bars=[];
+  while(rem.length){
+    let best=null;
+    stocks.forEach((s,si)=>{
+      if(left[si]<=0)return;
+      const f=fill(rem,s.len,kerf);
+      if(!f.idx.length)return;
+      const waste=(s.len-f.used)/s.len;
+      if(!best||waste<best.waste-1e-9||(Math.abs(waste-best.waste)<1e-9&&s.len<stocks[best.si].len))best={si,f,waste};
+    });
+    if(!best)break;
+    left[best.si]--;
+    const s=stocks[best.si],set=new Set(best.f.idx);
+    const pat=best.f.idx.map(i=>rem[i]).sort(byLen);
+    bars.push({stock:s,pieces:pat});
+    rem=rem.filter((_,i)=>!set.has(i));
+    while(repeat&&left[best.si]>0){            // reuse the same layout while the pieces last
+      const r2=rem.slice(),got=[];
+      for(const q of pat){const k=r2.findIndex(x=>x.name===q.name&&x.len===q.len);if(k<0)break;got.push(r2.splice(k,1)[0])}
+      if(got.length!==pat.length)break;
+      rem=r2;left[best.si]--;bars.push({stock:s,pieces:got});
+    }
+  }
+  const total=bars.reduce((a,b)=>a+b.stock.len,0);
+  return {bars,unplaced:rem,total,layouts:new Set(bars.map(layoutKey)).size};
+}
+function better(a,b){
+  if(!b)return true;
+  if(a.unplaced.length!==b.unplaced.length)return a.unplaced.length<b.unplaced.length;
+  if(Math.abs(a.total-b.total)>1e-9)return a.total<b.total;
+  if(a.bars.length!==b.bars.length)return a.bars.length<b.bars.length;
+  return a.layouts<b.layouts;
+}
+// A stable seed makes the same order produce the same plan on every run.
+function makeRng(seed){
+  let state=seed>>>0;
+  return ()=>{state=(state+0x6D2B79F5)|0;let t=state;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296};
+}
+function orderSeed(stocks,pieces,kerf){
+  const text=JSON.stringify([stocks.map(s=>[s.name,s.len,s.count]),pieces.map(p=>[p.name,p.len]),kerf]);
+  let h=2166136261;for(let i=0;i<text.length;i++)h=Math.imul(h^text.charCodeAt(i),16777619);
+  return h>>>0;
+}
+function optimise(stocks,pieces,kerf,iters){
+  const base=pieces.slice().sort((a,b)=>b.len-a.len);
+  const random=makeRng(orderSeed(stocks,pieces,kerf));
+  let best=null;
+  for(let it=0;it<iters;it++){
+    let order=base;
+    if(it>1){
+      const amt=0.02+random()*0.35;
+      order=base.map(p=>({p,k:p.len*(1+(random()-.5)*amt)})).sort((a,b)=>b.k-a.k).map(x=>x.p);
+    }
+    const r=pack(order,stocks,kerf,it%2===1);
+    if(better(r,best))best=r;
+  }
+  const pr=patternSearch(stocks,pieces,kerf,iters,random);
+  if(pr&&better(pr,best))best=pr;
+  return best;
+}
+/* Pattern search: enumerate every possible layout, then pick layouts with repeats to cover the demand. */
+function patternSearch(stocks,pieces,kerf,iters,random=Math.random){
+  const tm=new Map();
+  pieces.forEach(p=>{const k=p.name+'|'+p.len;if(!tm.has(k))tm.set(k,{name:p.name,len:p.len,n:0});tm.get(k).n++});
+  const types=[...tm.values()],T=types.length,demand=types.map(t=>t.n);
+  if(T>14)return null;
+  const pats=[];let blown=false;
+  stocks.forEach((s,si)=>{
+    const c=new Array(T).fill(0);
+    (function dfs(i,used,cnt){
+      if(blown)return;
+      if(i===T){
+        if(cnt>0){
+          if(pats.length>60000){blown=true;return}
+          const u=used-kerf;pats.push({si,c:c.slice(),u,sp:s.len-u,wf:(s.len-u)/s.len});
+        }
+        return;
+      }
+      for(let k=0;k<=demand[i];k++){
+        const nu=used+k*(types[i].len+kerf);
+        if(nu-kerf>s.len+1e-9&&k>0)break;
+        c[i]=k;dfs(i+1,nu,cnt+k);
+      }
+      c[i]=0;
+    })(0,0,0);
+  });
+  if(blown||!pats.length)return null;
+  let best=null;const t0=performance.now();
+  const maxIt=Math.max(200,iters*40);
+  for(let it=0;it<maxIt;it++){
+    if(it%50===0&&performance.now()-t0>2500)break;
+    const rem=demand.slice(),left=stocks.map(s=>s.count),picks=new Map();
+    let remN=pieces.length,bars=0,total=0;
+    while(remN>0){
+      let minW=Infinity;const cand=[];
+      for(const p of pats){
+        if(left[p.si]<=0)continue;
+        let ok=true;
+        for(let i=0;i<T;i++)if(p.c[i]>rem[i]){ok=false;break}
+        if(!ok)continue;
+        // Keep every feasible pattern: rejecting patterns that leave room for
+        // another piece can rule out useful combinations on later stock bars.
+        cand.push(p);if(p.wf<minW)minW=p.wf;
+      }
+      if(!cand.length)break;
+       const tol=random()<0.3?0:random()*0.25,pool=cand.filter(p=>p.wf<=minW+tol);
+       const p=pool[Math.floor(random()*pool.length)];
+      let mx=left[p.si];
+      for(let i=0;i<T;i++)if(p.c[i])mx=Math.min(mx,Math.floor(rem[i]/p.c[i]));
+       const m=random()<0.6?mx:1+Math.floor(random()*mx);
+      for(let i=0;i<T;i++){const d=p.c[i]*m;rem[i]-=d;remN-=d}
+      left[p.si]-=m;bars+=m;total+=m*stocks[p.si].len;
+      picks.set(p,(picks.get(p)||0)+m);
+    }
+    const cur={unplaced:{length:remN},total,bars:{length:bars},layouts:picks.size,picks,rem:rem.slice()};
+    if(better(cur,best))best=cur;
+  }
+  if(!best)return null;
+  const out=[];
+  best.picks.forEach((m,p)=>{
+    const pl=[];p.c.forEach((k,i)=>{for(let x=0;x<k;x++)pl.push({name:types[i].name,len:types[i].len})});
+    pl.sort(byLen);
+    for(let x=0;x<m;x++)out.push({stock:stocks[p.si],pieces:pl.slice()});
+  });
+  const un=[];best.rem.forEach((k,i)=>{for(let x=0;x<k;x++)un.push({name:types[i].name,len:types[i].len})});
+  return {bars:out,unplaced:un,total:best.total,layouts:best.layouts};
+}
+
+/* ---------- Run & report ---------- */
+function run(){
+  const kerf=Math.max(0,parseFloat($('#kerf').value)||0),trim=Math.max(0,parseFloat($('#trim').value)||0),unit=$('#unit').value.trim();
+  const stockRows=readRows('stock'),pieceRows=readRows('pieces');
+  const badCounts=[...stockRows.map(r=>r.count),...pieceRows.map(r=>r.count)].some(c=>c!==''&&(!Number.isInteger(Number(c))||Number(c)<0));
+  if(badCounts)return note('Counts must be whole numbers greater than or equal to zero. Leave stock count empty for unlimited supply.',true);
+  const stocks=stockRows.filter(r=>r.len>0).map(r=>({name:r.name,len:r.len,count:r.count===''?Infinity:Number(r.count),color:r.color||''}))
+    .map(s=>({...s,nominal:s.len,len:s.len-trim}));
+  const pieces=[];
+  pieceRows.filter(r=>r.len>0).forEach(r=>{const n=r.count===''?1:Number(r.count);for(let i=0;i<n;i++)pieces.push({name:r.name,len:r.len})});
+  stocks.splice(0,stocks.length,...stocks.filter(x=>x.len>0));
+   if(!stocks.length)return note('Add at least one stock length that is longer than the start/end trim.',true);
+  if(!pieces.length)return note('Add at least one piece to cut.',true);
+  const maxL=Math.max(...stocks.map(s=>s.len));
+  const tooLong=[...new Set(pieces.filter(p=>p.len>maxL).map(p=>p.name+' ('+p.len+')'))];
+  const ok=pieces.filter(p=>p.len<=maxL);
+   $('#msg').innerHTML=tooLong.length?`<div class="err">Longer than the longest usable stock length (stock minus start/end trim) and left out: ${esc(tooLong.join(', '))}</div>`:'';
+  if(!ok.length){$('#report').innerHTML='';return}
+  const iters=Math.min(5000,Math.max(1,parseInt($('#effort').value)||600));
+  const res=optimise(stocks,ok,kerf,iters);
+  render(res,stocks,kerf,unit,tooLong.length>0,trim);
+  $('#report').scrollIntoView({behavior:'smooth'});
+}
+function cutsText(pieces,unit){   // 3x VK1301 - 1170mm | 2x VK56 - 400mm
+  const m=new Map();
+  pieces.forEach(p=>{const k=p.name+'|'+p.len;if(!m.has(k))m.set(k,{p,n:0});m.get(k).n++});
+  return [...m.values()].map(g=>g.n+'x '+esc(g.p.name)+' - '+fmt(g.p.len)+esc(unit)).join(' | ');
+}
+function colorOf(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;return `hsl(${(h*47)%360} 55% 72%)`}
+
+function render(res,stocks,kerf,unit,_x,trim){
+  const u=' '+unit;
+  const bars=res.bars;
+  const pieceTotal=bars.reduce((a,b)=>a+b.pieces.reduce((x,p)=>x+p.len,0),0);
+  const kerfTotal=bars.reduce((a,b)=>a+kerf*Math.max(0,b.pieces.length-1),0);
+  const stockTotal=bars.reduce((a,b)=>a+b.stock.nominal,0);
+  const offcuts=stockTotal-pieceTotal-kerfTotal;
+  const util=stockTotal?pieceTotal/stockTotal*100:0;
+  // group identical patterns
+  const groups=new Map();
+  bars.forEach(b=>{
+    const k=layoutKey(b);
+    if(!groups.has(k))groups.set(k,{bar:b,n:0});groups.get(k).n++;
+  });
+  const pats=[...groups.values()].sort((a,b)=>b.n-a.n);
+  // stock usage
+  const use={};bars.forEach(b=>{const k=b.stock.name+'|'+b.stock.nominal;use[k]=use[k]||{n:0,color:b.stock.color};use[k].n++});
+  // piece totals
+  const names={};bars.forEach(b=>b.pieces.forEach(p=>{names[p.name]=names[p.name]||{}}));
+  const pm={};bars.forEach(b=>b.pieces.forEach(p=>{const k=p.name+'|'+p.len;pm[k]=pm[k]||{name:p.name,len:p.len,n:0};pm[k].n++}));
+  const legend=Object.keys(names).map(n=>`<span><i style="background:${colorOf(n)}"></i>${esc(n)}</span>`).join('');
+
+   let h=`<div class="rhead"><div><h2>${esc([$('#pnum').value.trim(),$('#pname').value.trim(),'Phase',$('#pfase').value.trim()].filter(Boolean).join(' '))}</h2>
+  ${$('#pdes').value.trim()?`<div style="font-size:15px">${esc($('#pdes').value.trim())}</div>`:''}
+   <small>Optimization report · ${new Date().toLocaleString()} · kerf ${fmt(kerf)}${u} · start/end trim ${fmt(trim)}${u}</small></div>
+  <div class="rside"><table class="mini"><tr><td>Material used</td><td>${util.toFixed(1)}%</td></tr><tr><td>Waste</td><td>${(100-util).toFixed(1)}%</td></tr></table>
+  <button class="primary noprint" onclick="window.print()">Export to PDF</button></div></div>`;
+  if(res.unplaced.length){
+    const m={};res.unplaced.forEach(p=>{const k=p.name+' ('+p.len+')';m[k]=(m[k]||0)+1});
+    h+=`<div class="err">Not enough stock: ${res.unplaced.length} piece(s) could not be placed – ${esc(Object.entries(m).map(([k,v])=>v+'× '+k).join(', '))}</div>`;
+  }
+  h+=`<div class="two"><div><h3>Stock used</h3><table class="rep"><tr><th>Colour</th><th>Stock</th><th>Length</th><th>Used</th><th>Total length</th></tr>`;
+  Object.entries(use).forEach(([k,o])=>{const n=o.n,[nm,l]=k.split('|');h+=`<tr><td>${esc(o.color)}</td><td>${esc(nm)}</td><td>${l}${u}</td><td>${n}</td><td>${fmt(n*l)}${u}</td></tr>`});
+  h+=`</table></div><div><h3>Pieces cut</h3><table class="rep"><tr><th>Piece</th><th>Length</th><th>Count</th></tr>`;
+  Object.values(pm).sort((a,b)=>b.len-a.len).forEach(p=>h+=`<tr><td>${esc(p.name)}</td><td>${p.len}${u}</td><td>${p.n}</td></tr>`);
+  h+=`</table></div></div><h3>Cutting layouts</h3><div class="legend">${legend}</div>`;
+  pats.forEach((g,i)=>{
+    const b=g.bar,L=b.stock.len,sum=b.pieces.reduce((a,p)=>a+p.len,0);
+    const off=L-sum-kerf*Math.max(0,b.pieces.length-1);
+    let segs='';
+    b.pieces.forEach((p,j)=>{
+      segs+=`<div class="seg" style="width:${p.len/L*100}%;background:${colorOf(p.name)}" title="${esc(p.name)} ${p.len}">${esc(fmt(p.len))}</div>`;
+      if(kerf>0&&j<b.pieces.length-1)segs+=`<div class="kerf" style="width:${Math.max(kerf/L*100,0.25)}%"></div>`;
+    });
+    h+=`<div class="pat"><div class="top"><span><b>${g.n>1?g.n+'× ':''}Layout ${i+1}</b> – ${esc(b.stock.name)}, ${fmt(b.stock.nominal)}${u} (usable ${fmt(L)}${u})</span><span>Offcut ${fmt(off)}${u} (${(off/L*100).toFixed(1)}%)</span></div>
+    <div class="bar">${segs}</div>
+    <div class="cuts">${cutsText(b.pieces,unit)}</div></div>`;
+  });
+  $('#report').innerHTML=h;
+}
+/* Paste a grid copied from Excel: cells split on tabs, rows on new lines, order Name / Count / Length */
+document.addEventListener('paste',e=>{
+  const el=e.target;
+  if(!el.matches||!el.matches('#stock input,#pieces input'))return;
+  const text=(e.clipboardData||window.clipboardData).getData('text');
+  if(!/[\t\n]/.test(text.trim()))return;          // a single value pastes normally
+  e.preventDefault();
+  const lines=text.replace(/\r/g,'').split('\n');
+  while(lines.length&&!lines[lines.length-1].trim())lines.pop();
+  const grid=lines.map(l=>l.split('\t').map(c=>c.trim().replace(/^"|"$/g,'')));
+  const num=v=>/^\d{1,3}(,\d{3})+$/.test(v.replace(/\s/g,''))?v.replace(/[\s,]/g,''):v.replace(/\s/g,'').replace(',','.');
+  const isNum=v=>v!==''&&!isNaN(parseFloat(num(v)));
+  if(grid.length>1){const h=grid[0];if(h.length>=2&&!isNum(h[h.length-1])&&!isNum(h[h.length-2]))grid.shift()}   // skip header row
+  const tb=el.closest('tbody'),tr0=el.closest('tr');
+  const startRow=[...tb.rows].indexOf(tr0);
+  const startCol=[...tr0.querySelectorAll('input')].indexOf(el);
+  const col0=grid[0].length>=3?0:startCol;
+  grid.forEach((cells,r)=>{
+    while(tb.rows.length<=startRow+r)addRow(tb.id);
+    const inputs=tb.rows[startRow+r].querySelectorAll('input');
+    cells.forEach((v,c)=>{const inp=inputs[col0+c];if(inp)inp.value=(col0+c===1||col0+c===2)?num(v):v});
+  });
+  note('Pasted '+grid.length+' row(s).');
+});
+loadData();
+</script>
+</body>
+</html>
